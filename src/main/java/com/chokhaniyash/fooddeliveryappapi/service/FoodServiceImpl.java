@@ -12,13 +12,14 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.PutObjectAclResponse;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import software.amazon.awssdk.services.s3.model.PutObjectResponse;
+import software.amazon.awssdk.services.s3.model.*;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 
 @Service
 @AllArgsConstructor
@@ -32,7 +33,8 @@ public class FoodServiceImpl implements FoodService{
         String contentType = file.getContentType();
         String fileNameExtension = file.getOriginalFilename().substring(file.getOriginalFilename().lastIndexOf(".")+1);
         String key = UUID.randomUUID().toString() + "." + fileNameExtension;
-        System.out.println(key);
+//        System.out.println(key);
+//        System.out.println(file.getOriginalFilename());
         try{
             PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                     .bucket(bucketName)
@@ -41,7 +43,7 @@ public class FoodServiceImpl implements FoodService{
                     .build();
             PutObjectResponse putObjectResponse = s3Client.putObject(putObjectRequest, RequestBody.fromBytes(file.getBytes()));
             if(putObjectResponse.sdkHttpResponse().isSuccessful()){
-                return "https://"+bucketName+".s3.amazonaws,com/"+key;
+                return "https://"+bucketName+".s3.amazonaws.com/"+key;
             }
             else{
                 throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,"File upload failed");
@@ -63,7 +65,35 @@ public class FoodServiceImpl implements FoodService{
 
     @Override
     public List<FoodResponse> readFoods() {
-        return List.of();
+        List<FoodEntity> foodList = foodRepository.findAll();
+        return foodList.stream().map(object -> convertToResponse(object)).collect(Collectors.toList());
+    }
+
+    @Override
+    public FoodResponse readFood(String id) {
+        FoodEntity food = foodRepository.findById(id).orElseThrow(()-> new RuntimeException("Food not found for the given id "+id));
+        return convertToResponse(food);
+    }
+
+    @Override
+    public boolean deleteFile(String fileName) {
+        DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
+                .bucket(bucketName)
+                .key(fileName)
+                .build();
+        DeleteObjectResponse deleteObjectResponse = s3Client.deleteObject(deleteObjectRequest);
+        return deleteObjectResponse.sdkHttpResponse().isSuccessful();
+    }
+
+    @Override
+    public void deleteFood(String id) {
+        FoodResponse response = readFood(id);
+        String imageUrl = response.getImageUrl();
+        String filename = imageUrl.substring(imageUrl.lastIndexOf("/")+1);
+        boolean isFileDeleted = deleteFile(filename);
+        if(isFileDeleted){
+            foodRepository.deleteById(id);
+        }
     }
 
     private FoodEntity convertToEntity(FoodRequest request){
