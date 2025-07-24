@@ -21,9 +21,10 @@ public class AWSConfig {
     public S3Client s3Client(){
 //        System.out.println("Access Key  "+ accessKey);
 //        System.out.println("Secret Key  "+ secretKey);
+        StaticCredentialsProvider  credentials = StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey));
         return S3Client.builder()
                 .region(Region.of(region))
-                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
+                .credentialsProvider(credentials)
                 .build();
     }
 }
